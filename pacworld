@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+
+__author__       = 'L0cutus'
+__email__        = 'never@e-kki.it'
+__program__      = 'PacWorld'
+__version__      = '0.3.4'
+__date__         = 'Date: 12/09/2006'
+__copyright__    = 'Copyright (c) 2006 L0cutus'
+__license__      = 'GPL'
+__contributors__ = 'Travis Nickles <ryoohki7@yahoo.com>'
+
+import os
+import sys
+import string
+import getopt
+
+w = ['|', '/', '-', '\\']
+wc = 0
+sp = "-" * 72
+
+def usage():
+  print "PacWorld 0.3.4 (c) 2006 L0cutus"
+  print "Release Date: 12/09/2006\n"
+  print "Usage: pacworld [option(s)]\n"
+  print "Options are:"
+  print "  -e/--exec    - have pacman reinstall any broken packages."
+  print "                 you must have sudo working for your user to use pacman"
+  print "  -h/--help    - displays this help text and exits."
+  print "  -p/--path    - set temporary directory for pacworld."  
+  print "  -l/--log     - write also to log (pacworld.log)."
+  print "  -v/--verbose - be more verbose on output"
+  print "  -y/--yes     - ask YES to all pacman question (!!! WARNING !!!)"
+
+
+# Default data
+pathcfg = "/etc/pacworld/"
+path = os.path.expanduser("~/.pacworld/")
+_exec = False
+_log = False
+_verbose = False
+_yes = False
+_answ = "n"
+
+try:
+  opts,args = getopt.getopt(sys.argv[1:], "hp:elvy", ["help", "path=", "exec", "log", "verbose", "yes"])
+except getopt.GetoptError:
+  usage()
+  sys.exit(0)	
+
+for opt,arg in opts:
+  if opt in ("-h", "--help"):
+    usage()
+    sys.exit(0)
+  elif opt in ("-e", "--exec"):
+    _exec = True
+  elif opt in ("-p", "--path"):
+    path = arg
+  elif opt in ("-l", "--log"):
+    _log = True
+  elif opt in ("-v", "--verbose"):
+    _verbose = True
+  elif opt in ("-y", "--yes"):
+    _yes = True
+
+if not os.path.exists(path):
+  os.mkdir(path)
+	
+if os.path.isfile(pathcfg + "pacworld.not"):
+  do_not_process = open(pathcfg + "pacworld.not", "r")
+  N=do_not_process.readlines()
+
+print "\n...making the database of all the installed packages...wait..."
+os.system("pacman -Ql>" + path + "allpkgs.tmp") 
+fallpkgs = open(path + "allpkgs.tmp", "r")
+L = fallpkgs.readlines()
+if _log: flog = open(path + "pacworld.log", "w")
+aa = ""
+db = []
+done = False
+for cmd in range(len(L)):
+  a = L[cmd].split()[0]
+  if N and ((a + "\n") in N):
+    if aa <> a:
+      if _verbose: 
+        print sp
+        print "Skipped --> [ " + a + " ]"
+      if _log: 
+        print >> flog, sp
+        print >> flog,"Skipped --> [ " + a + " ]"
+      aa = a
+    continue
+  if wc == 4:
+    wc=0
+    sys.stdout.write(w[wc]+"  "+a+" "*50+'\r')
+    wc=wc+1
+  else:
+    sys.stdout.write(w[wc]+"  "+a+" "*50+'\r')
+    wc=wc+1
+  sys.stdout.flush()
+  b = L[cmd].splitlines()[0].replace(a + " ","",1)
+  if not (os.path.isfile(b) or os.path.isdir(b) or os.path.islink(b)):
+    if aa <> a:
+      print sp
+      print "must be rebuilt --> [ " + a +" ]"
+      if _log: 
+        print >> flog, sp
+        print >> flog, "must be rebuilt --> [ " + a + " ]"
+      db.append(a)
+      done = True
+      aa = a
+    if _verbose: 
+      print "missing --> [ " + b + " ]"
+    if _log: 
+      print >> flog, "missing --> [ " + b + " ]"
+
+if _exec and done:
+  print sp
+  print "Start to fix packages..."
+  if _yes:
+    print
+    print "*******************************************************"
+    print "                   !!! WARNING !!!"
+    print "You have chose to say 'ALWAYS YES' to all pacman query,"
+    print "this can be POTENTIALLY DANGEROUS..."
+    print "*******************************************************"
+    _answ = raw_input("Continue (y/n)?")
+    print
+    if _answ == "y" or _answ == "yes":
+      _answ = "y"
+      for pkg in db:
+        print sp
+        os.system("sudo pacman --noconfirm -S " + pkg)
+        print sp
+        print "Fixed --> [ " + pkg + " ]"
+
+print sp
+if not done:
+  print "No broken packages found..."
+
+if _exec and done and (_answ == "y"):
+  print "Fixed " + str(len(db)) + " broken packages !"
+elif not _exec and done:
+  print str(len(db)) + " broken packages must be fixed !"
+
+print "done..."
+os.remove(path + "allpkgs.tmp")
+ 
